@@ -15,7 +15,7 @@ func Unpack(data []byte) (any, error) {
 }
 
 func UnpackToBytes(data []byte) ([]byte, error) {
-	decoded, err := decoder.unpack(data)
+	decoded, err := Unpack(data)
 	if err != nil {
 		return nil, err
 	}
