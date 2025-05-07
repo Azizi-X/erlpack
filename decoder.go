@@ -166,8 +166,18 @@ func (d *Decoder) decode() (any, error) {
 			m[fmt.Sprint(key)] = val
 		}
 		return m, nil
+	case LARGE_BIG_EXT:
+		digits, err := d.readUint32()
+		if err != nil {
+			return nil, err
+		}
+		return d.decodeBigInt(digits)
 	case SMALL_BIG_EXT:
-		return d.decodeBigInt()
+		digits, err := d.readUint8()
+		if err != nil {
+			return nil, err
+		}
+		return d.decodeBigInt(uint32(digits))
 	case COMPRESSED:
 		return d.decodeCompressed()
 	default:
@@ -187,16 +197,50 @@ func (d *Decoder) decodeTuple(length int) ([]any, error) {
 	return tuple, nil
 }
 
-func (d *Decoder) decodeBigInt() (*big.Int, error) {
-	n, _ := d.readUint8()
-	sign, _ := d.readUint8()
-	raw, _ := d.read(int(n))
+func (d *Decoder) decodeBigInt(digits uint32) (any, error) {
+	sign, err := d.readUint8()
+	if err != nil {
+		return nil, err
+	}
+
+	if digits > 8 {
+		return nil, fmt.Errorf("unable to decode big ints larger than 8 bytes")
+	}
+
+	raw, err := d.read(int(digits))
+	if err != nil {
+		return nil, err
+	}
+
 	slices.Reverse(raw)
+
 	bi := new(big.Int).SetBytes(raw)
+
 	if sign != 0 {
 		bi = bi.Neg(bi)
 	}
-	return bi, nil
+
+	if digits <= 4 {
+		if sign == 0 {
+			return uint32(bi.Int64()), nil
+		}
+		if (bi.Int64() & (1 << 31)) == 0 {
+			return -int32(bi.Int64()), nil
+		}
+	}
+
+	var result string
+	if sign == 0 {
+		result = fmt.Sprintf("%d", bi)
+	} else {
+		result = fmt.Sprintf("-%d", bi)
+	}
+
+	if result == "" {
+		return nil, fmt.Errorf("unable to convert big int to string")
+	}
+
+	return bi.String(), nil
 }
 
 func (d *Decoder) decodeCompressed() (any, error) {

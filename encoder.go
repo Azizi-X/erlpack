@@ -43,6 +43,12 @@ func (e *Encoder) AppendFloat64(f float64) []byte {
 	return buf
 }
 
+func (e *Encoder) AppendFloat32(f float32) []byte {
+	buf := make([]byte, 4)
+	binary.BigEndian.PutUint32(buf, math.Float32bits(f))
+	return buf
+}
+
 func (e *Encoder) AppendInt(v int) []byte {
 	if v >= 0 && v <= 255 {
 		result := e.AppendByte(SMALL_INTEGER_EXT)
@@ -58,6 +64,12 @@ func (e *Encoder) AppendInt(v int) []byte {
 func (e *Encoder) AppendInt32(v int32) []byte {
 	buf := make([]byte, 4)
 	binary.BigEndian.PutUint32(buf, uint32(v))
+	return buf
+}
+
+func (e *Encoder) AppendInt64(v int64) []byte {
+	buf := make([]byte, 8)
+	binary.BigEndian.PutUint64(buf, uint64(v))
 	return buf
 }
 
@@ -83,6 +95,11 @@ func (e *Encoder) rawPack(value any) []byte {
 		result = append(result, e.AppendInt(v)...)
 	case int32:
 		result = append(result, e.AppendInt32(v)...)
+	case int64:
+		result = append(result, e.AppendInt64(v)...)
+	case float32:
+		result = append(result, e.AppendByte(NEW_FLOAT_EXT)...)
+		result = append(result, e.AppendFloat32(v)...)
 	case float64:
 		result = append(result, e.AppendByte(NEW_FLOAT_EXT)...)
 		result = append(result, e.AppendFloat64(v)...)
