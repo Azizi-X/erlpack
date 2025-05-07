@@ -100,17 +100,23 @@ func (e *Encoder) rawPack(value any) []byte {
 	case []any:
 		result = append(result, e.AppendByte(LIST_EXT)...)
 		result = append(result, e.AppendUint32(uint32(len(v)))...)
-		for _, item := range v {
-			result = append(result, e.rawPack(item)...)
+		for i := range v {
+			result = append(result, e.pack(v[i])...)
 		}
+		result = append(result, e.AppendByte(NIL_EXT)...)
 	case map[string]any:
 		result = append(result, e.AppendMap(v)...)
 	default:
 		t := reflect.TypeOf(v)
+		val := reflect.ValueOf(v)
+
 		for t.Kind() == reflect.Ptr {
 			t = t.Elem()
+			val = val.Elem()
 		}
-		if t.Kind() == reflect.Struct {
+
+		switch t.Kind() {
+		case reflect.Struct:
 			var data map[string]any
 			bytes, err := json.Marshal(v)
 			if err != nil {
@@ -118,8 +124,17 @@ func (e *Encoder) rawPack(value any) []byte {
 			} else if err := json.Unmarshal(bytes, &data); err != nil {
 				panic(err)
 			}
-			result = append(result, e.AppendMap(data)...)
-		} else {
+			result = append(result, e.pack(data)...)
+
+		case reflect.Slice, reflect.Array:
+			result = append(result, e.AppendByte(LIST_EXT)...)
+			result = append(result, e.AppendUint32(uint32(val.Len()))...)
+			for i := range val.Len() {
+				item := val.Index(i).Interface()
+				result = append(result, e.pack(item)...)
+			}
+			result = append(result, e.AppendByte(NIL_EXT)...)
+		default:
 			fmt.Printf("Unsupported type: %T\n", v)
 		}
 	}

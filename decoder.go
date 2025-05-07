@@ -117,16 +117,15 @@ func (d *Decoder) decode() (any, error) {
 			length = int(l)
 		}
 		raw, _ := d.read(length)
-		str := string(raw)
-		switch str {
-		case "true":
+		switch {
+		case bytes.Equal(raw, []byte("true")):
 			return true, nil
-		case "false":
+		case bytes.Equal(raw, []byte("false")):
 			return false, nil
-		case "nil", "null":
+		case bytes.Equal(raw, []byte("nil")), bytes.Equal(raw, []byte("null")):
 			return nil, nil
 		default:
-			return str, nil
+			return string(raw), nil
 		}
 	case STRING_EXT:
 		length, _ := d.readUint16()
