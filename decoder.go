@@ -10,8 +10,6 @@ import (
 	"math/big"
 	"slices"
 	"unsafe"
-
-	"github.com/segmentio/encoding/json"
 )
 
 const (
@@ -45,11 +43,8 @@ type Decoder struct {
 	offset int
 }
 
-func NewDecoder(data []byte) (*Decoder, error) {
-	if len(data) == 0 || data[0] != FORMAT_VERSION {
-		return nil, errors.New("invalid or missing format version")
-	}
-	return &Decoder{data: data[1:]}, nil
+func NewDecoder() *Decoder {
+	return &Decoder{}
 }
 
 func (d *Decoder) read(n int) ([]byte, error) {
@@ -81,16 +76,15 @@ func (d *Decoder) readUint64() (uint64, error) {
 	return binary.BigEndian.Uint64(bytes), err
 }
 
-func (d *Decoder) DecodeToBytes() ([]byte, error) {
-	decoded, err := d.Decode()
-	if err != nil {
-		return nil, err
+func (d *Decoder) unpack(data []byte) (any, error) {
+	if len(data) == 0 || data[0] != FORMAT_VERSION {
+		return nil, errors.New("invalid or missing format version")
 	}
-
-	return json.Marshal(decoded)
+	d.data = data[1:]
+	return d.decode()
 }
 
-func (d *Decoder) Decode() (any, error) {
+func (d *Decoder) decode() (any, error) {
 	tag, err := d.readUint8()
 	if err != nil {
 		return nil, err
@@ -148,7 +142,7 @@ func (d *Decoder) Decode() (any, error) {
 		length, _ := d.readUint32()
 		list := make([]any, length)
 		for i := range length {
-			item, _ := d.Decode()
+			item, _ := d.decode()
 			list[i] = item
 		}
 		_, _ = d.readUint8()
@@ -163,8 +157,8 @@ func (d *Decoder) Decode() (any, error) {
 		length, _ := d.readUint32()
 		m := make(map[string]any)
 		for range length {
-			key, _ := d.Decode()
-			val, _ := d.Decode()
+			key, _ := d.decode()
+			val, _ := d.decode()
 			m[fmt.Sprint(key)] = val
 		}
 		return m, nil
@@ -180,7 +174,7 @@ func (d *Decoder) Decode() (any, error) {
 func (d *Decoder) decodeTuple(length int) ([]any, error) {
 	tuple := make([]any, length)
 	for i := range length {
-		val, err := d.Decode()
+		val, err := d.decode()
 		if err != nil {
 			return nil, err
 		}
@@ -216,11 +210,7 @@ func (d *Decoder) decodeCompressed() (any, error) {
 		return nil, err
 	}
 
-	child, err := NewDecoder(uncomp)
-	if err != nil {
-		return nil, err
-	}
-	return child.Decode()
+	return d.unpack(uncomp)
 }
 
 func float64FromBits(bits uint64) float64 {
