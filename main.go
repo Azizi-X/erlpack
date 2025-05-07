@@ -1,6 +1,10 @@
 package erlpack
 
-import "github.com/segmentio/encoding/json"
+import (
+	"fmt"
+
+	"github.com/segmentio/encoding/json"
+)
 
 type Etf struct {
 	*Encoder
@@ -8,15 +12,25 @@ type Etf struct {
 }
 
 func (etf *Etf) Pack(value any) []byte {
+	if etf == nil {
+		return nil
+	}
 	return etf.pack(value)
 }
 
 func (etf *Etf) Unpack(data []byte) (any, error) {
+	if etf == nil {
+		return nil, fmt.Errorf("etf is nil")
+	}
 	defer etf.reset()
 	return etf.unpack(data)
 }
 
 func (etf *Etf) UnpackToBytes(data []byte) ([]byte, error) {
+	if etf == nil {
+		return nil, fmt.Errorf("etf is nil")
+	}
+
 	decoded, err := etf.Unpack(data)
 	if err != nil {
 		return nil, err
