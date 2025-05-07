@@ -101,7 +101,7 @@ func (e *Encoder) rawPack(value any) []byte {
 		result = append(result, e.AppendByte(LIST_EXT)...)
 		result = append(result, e.AppendUint32(uint32(len(v)))...)
 		for i := range v {
-			result = append(result, e.pack(v[i])...)
+			result = append(result, e.rawPack(v[i])...)
 		}
 		result = append(result, e.AppendByte(NIL_EXT)...)
 	case map[string]any:
@@ -124,14 +124,14 @@ func (e *Encoder) rawPack(value any) []byte {
 			} else if err := json.Unmarshal(bytes, &data); err != nil {
 				panic(err)
 			}
-			result = append(result, e.pack(data)...)
+			result = append(result, e.rawPack(data)...)
 
 		case reflect.Slice, reflect.Array:
 			result = append(result, e.AppendByte(LIST_EXT)...)
 			result = append(result, e.AppendUint32(uint32(val.Len()))...)
 			for i := range val.Len() {
 				item := val.Index(i).Interface()
-				result = append(result, e.pack(item)...)
+				result = append(result, e.rawPack(item)...)
 			}
 			result = append(result, e.AppendByte(NIL_EXT)...)
 		default:
