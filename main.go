@@ -2,23 +2,35 @@ package erlpack
 
 import "github.com/segmentio/encoding/json"
 
-var encoder = NewEncoder()
-var decoder = NewDecoder()
-
-func Pack(value any) []byte {
-	return encoder.pack(value)
+type Etf struct {
+	*Encoder
+	*Decoder
 }
 
-func Unpack(data []byte) (any, error) {
-	defer decoder.reset()
-	return decoder.unpack(data)
+func (etf *Etf) Pack(value any) []byte {
+	return etf.pack(value)
 }
 
-func UnpackToBytes(data []byte) ([]byte, error) {
-	decoded, err := Unpack(data)
+func (etf *Etf) Unpack(data []byte) (any, error) {
+	defer etf.reset()
+	return etf.unpack(data)
+}
+
+func (etf *Etf) UnpackToBytes(data []byte) ([]byte, error) {
+	decoded, err := etf.Unpack(data)
 	if err != nil {
 		return nil, err
 	}
 
 	return json.Marshal(decoded)
+}
+
+func NewEtf() *Etf {
+	var encoder = NewEncoder()
+	var decoder = NewDecoder()
+
+	return &Etf{
+		Encoder: encoder,
+		Decoder: decoder,
+	}
 }
