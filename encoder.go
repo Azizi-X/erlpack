@@ -2,8 +2,10 @@ package erlpack
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"math"
+	"reflect"
 )
 
 type Encoder struct{}
@@ -104,7 +106,22 @@ func (e *Encoder) rawPack(value any) []byte {
 	case map[string]any:
 		result = append(result, e.AppendMap(v)...)
 	default:
-		fmt.Printf("Unsupported type: %T\n", v)
+		t := reflect.TypeOf(v)
+		for t.Kind() == reflect.Ptr {
+			t = t.Elem()
+		}
+		if t.Kind() == reflect.Struct {
+			var data map[string]any
+			bytes, err := json.Marshal(v)
+			if err != nil {
+				panic(err)
+			} else if err := json.Unmarshal(bytes, &data); err != nil {
+				panic(err)
+			}
+			result = append(result, e.AppendMap(data)...)
+		} else {
+			fmt.Printf("Unsupported type: %T\n", v)
+		}
 	}
 
 	return result
