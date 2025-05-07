@@ -10,6 +10,7 @@ func Pack(value any) []byte {
 }
 
 func Unpack(data []byte) (any, error) {
+	defer decoder.reset()
 	return decoder.unpack(data)
 }
 

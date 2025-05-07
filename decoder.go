@@ -47,6 +47,11 @@ func NewDecoder() *Decoder {
 	return &Decoder{}
 }
 
+func (d *Decoder) reset() {
+	d.offset = 0
+	d.data = nil
+}
+
 func (d *Decoder) read(n int) ([]byte, error) {
 	if d.offset+n > len(d.data) {
 		return nil, errors.New("read past end of buffer")
