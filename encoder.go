@@ -2,7 +2,6 @@ package erlpack
 
 import (
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
 	"math"
 	"reflect"
@@ -83,6 +82,18 @@ func (e *Encoder) AppendMap(m map[string]any) []byte {
 	return result
 }
 
+func (e *Encoder) AppendNil() []byte {
+	return []byte{SMALL_ATOM_EXT, 3, 'n', 'i', 'l'}
+}
+
+func (e *Encoder) AppendBool(v bool) []byte {
+	if v {
+		return []byte{SMALL_ATOM_EXT, 4, 't', 'r', 'u', 'e'}
+	}
+
+	return []byte{SMALL_ATOM_EXT, 5, 'f', 'a', 'l', 's', 'e'}
+}
+
 func (e *Encoder) pack(value any) []byte {
 	return append([]byte{FORMAT_VERSION}, e.rawPack(value)...)
 }
@@ -106,14 +117,9 @@ func (e *Encoder) rawPack(value any) []byte {
 	case string:
 		result = append(result, e.AppendBinary(v)...)
 	case bool:
-		if v {
-			result = append(result, e.AppendBinary("true")...)
-		} else {
-			result = append(result, e.AppendBinary("false")...)
-		}
+		result = append(result, e.AppendBool(v)...)
 	case nil:
-		result = append(result, e.AppendByte(MAP_EXT)...)
-		result = append(result, e.AppendUint32(0)...)
+		result = append(result, e.AppendNil()...)
 	case []any:
 		result = append(result, e.AppendByte(LIST_EXT)...)
 		result = append(result, e.AppendUint32(uint32(len(v)))...)
@@ -134,15 +140,8 @@ func (e *Encoder) rawPack(value any) []byte {
 
 		switch t.Kind() {
 		case reflect.Struct:
-			var data map[string]any
-			bytes, err := json.Marshal(v)
-			if err != nil {
-				panic(err)
-			} else if err := json.Unmarshal(bytes, &data); err != nil {
-				panic(err)
-			}
+			var data = NewStruct(v).Map()
 			result = append(result, e.rawPack(data)...)
-
 		case reflect.Slice, reflect.Array:
 			result = append(result, e.AppendByte(LIST_EXT)...)
 			result = append(result, e.AppendUint32(uint32(val.Len()))...)
@@ -152,7 +151,7 @@ func (e *Encoder) rawPack(value any) []byte {
 			}
 			result = append(result, e.AppendByte(NIL_EXT)...)
 		default:
-			fmt.Printf("Unsupported type: %T\n", v)
+			fmt.Printf("Unsupported etf type: %T\n", v)
 		}
 	}
 
