@@ -239,7 +239,7 @@ func (d *Decoder) decodeStringAsList() ([]any, error) {
 	}
 
 	if d.offset+int(length) > len(d.data) {
-		return nil, fmt.Errorf("reading sequence past the end of the buffer")
+		return nil, fmt.Errorf("reading sequence past the end of the buffer (1)")
 	}
 
 	result := make([]any, length)
