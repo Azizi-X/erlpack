@@ -22,8 +22,10 @@ func (etf *Etf) Unpack(data []byte) (any, error) {
 	if etf == nil {
 		return nil, fmt.Errorf("etf is nil")
 	}
-	defer etf.reset()
-	return etf.unpack(data)
+
+	v, err := etf.unpack(data)
+	etf.reset()
+	return v, err
 }
 
 func (etf *Etf) UnpackToBytes(data []byte) ([]byte, error) {

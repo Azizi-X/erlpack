@@ -427,7 +427,10 @@ func (d *Decoder) decode() (any, error) {
 	}
 }
 
-func (d *Decoder) decodeCompressed() (interface{}, error) {
+func (d *Decoder) decodeCompressed() (any, error) {
+
+	fmt.Println("Etf - decoding compressed")
+
 	uncompressedSize, err := d.read32()
 	if err != nil {
 		return nil, err
