@@ -55,7 +55,7 @@ func NewDecoder() *Decoder {
 
 func (d *Decoder) reset() {
 	d.offset = 0
-	d.data = nil
+	d.data = []byte{}
 }
 
 func (d *Decoder) read8() (uint8, error) {
