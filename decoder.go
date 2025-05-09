@@ -278,13 +278,13 @@ func (d *Decoder) decodeList() (any, error) {
 	return array, nil
 }
 
-func (d *Decoder) decodeMap() (map[any]any, error) {
+func (d *Decoder) decodeMap() (map[string]any, error) {
 	length, err := d.read32()
 	if err != nil {
 		return nil, err
 	}
 
-	resultMap := make(map[any]any, length)
+	resultMap := make(map[string]any, length)
 
 	for i := uint32(0); i < length; i++ {
 		key, err := d.decode()
@@ -297,7 +297,7 @@ func (d *Decoder) decodeMap() (map[any]any, error) {
 			return nil, err
 		}
 
-		resultMap[key] = value
+		resultMap[key.(string)] = value
 	}
 
 	return resultMap, nil
