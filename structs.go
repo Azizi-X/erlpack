@@ -1,4 +1,6 @@
-package main
+package erlpack
+
+// https://github.com/fatih/structs
 
 import (
 	"fmt"
