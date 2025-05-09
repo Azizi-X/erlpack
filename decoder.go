@@ -297,7 +297,7 @@ func (d *Decoder) decodeMap() (map[string]any, error) {
 			return nil, err
 		}
 
-		resultMap[key.(string)] = value
+		resultMap[fmt.Sprint(key)] = value
 	}
 
 	return resultMap, nil
