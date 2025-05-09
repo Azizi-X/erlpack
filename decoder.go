@@ -317,7 +317,7 @@ func (d *Decoder) decodeBinaryAsString() (string, error) {
 	return str, nil
 }
 
-func (d *Decoder) decodeBig(digits uint32) (interface{}, error) {
+func (d *Decoder) decodeBig(digits uint32) (any, error) {
 	sign, err := d.read8()
 	if err != nil {
 		return nil, err
@@ -359,7 +359,7 @@ func (d *Decoder) decodeBig(digits uint32) (interface{}, error) {
 	return outBuffer, nil
 }
 
-func (d *Decoder) decodeSmallBig() (interface{}, error) {
+func (d *Decoder) decodeSmallBig() (any, error) {
 	bytes, err := d.read8()
 	if err != nil {
 		return nil, err
@@ -367,7 +367,7 @@ func (d *Decoder) decodeSmallBig() (interface{}, error) {
 	return d.decodeBig(uint32(bytes))
 }
 
-func (d *Decoder) decodeLargeBig() (interface{}, error) {
+func (d *Decoder) decodeLargeBig() (any, error) {
 	bytes, err := d.read32()
 	if err != nil {
 		return nil, err
