@@ -83,18 +83,6 @@ func (e *Encoder) AppendMap(m map[string]any) []byte {
 	return result
 }
 
-func (e *Encoder) AppendNil() []byte {
-	return []byte{SMALL_ATOM_EXT, 3, 'n', 'i', 'l'}
-}
-
-func (e *Encoder) AppendBool(v bool) []byte {
-	if v {
-		return []byte{SMALL_ATOM_EXT, 4, 't', 'r', 'u', 'e'}
-	}
-
-	return []byte{SMALL_ATOM_EXT, 5, 'f', 'a', 'l', 's', 'e'}
-}
-
 func (e *Encoder) pack(value any) []byte {
 	return append([]byte{FORMAT_VERSION}, e.rawPack(value)...)
 }
@@ -118,9 +106,14 @@ func (e *Encoder) rawPack(value any) []byte {
 	case string:
 		result = append(result, e.AppendBinary(v)...)
 	case bool:
-		result = append(result, e.AppendBool(v)...)
+		if v {
+			result = append(result, e.AppendBinary("true")...)
+		} else {
+			result = append(result, e.AppendBinary("false")...)
+		}
 	case nil:
-		result = append(result, e.AppendNil()...)
+		result = append(result, e.AppendByte(MAP_EXT)...)
+		result = append(result, e.AppendUint32(0)...)
 	case []any:
 		result = append(result, e.AppendByte(LIST_EXT)...)
 		result = append(result, e.AppendUint32(uint32(len(v)))...)
