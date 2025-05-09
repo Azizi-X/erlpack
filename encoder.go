@@ -2,6 +2,7 @@ package erlpack
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"math"
 	"reflect"
@@ -48,7 +49,7 @@ func (e *Encoder) AppendFloat32(f float32) []byte {
 	return buf
 }
 
-func (e *Encoder) AppendInt(v int64) []byte {
+func (e *Encoder) AppendInt(v int) []byte {
 	if v >= 0 && v <= 255 {
 		result := e.AppendByte(SMALL_INTEGER_EXT)
 		result = append(result, byte(v))
@@ -103,19 +104,17 @@ func (e *Encoder) rawPack(value any) []byte {
 
 	switch v := value.(type) {
 	case int:
-		result = append(result, e.AppendInt(int64(v))...)
-	case int32:
-		result = append(result, e.AppendInt(int64(v))...)
-	case int64:
 		result = append(result, e.AppendInt(v)...)
+	case int32:
+		result = append(result, e.AppendInt32(v)...)
+	case int64:
+		result = append(result, e.AppendInt64(v)...)
 	case float32:
 		result = append(result, e.AppendByte(NEW_FLOAT_EXT)...)
 		result = append(result, e.AppendFloat32(v)...)
 	case float64:
 		result = append(result, e.AppendByte(NEW_FLOAT_EXT)...)
 		result = append(result, e.AppendFloat64(v)...)
-	case *string:
-		result = append(result, e.AppendBinary(*v)...)
 	case string:
 		result = append(result, e.AppendBinary(v)...)
 	case bool:
@@ -142,8 +141,15 @@ func (e *Encoder) rawPack(value any) []byte {
 
 		switch t.Kind() {
 		case reflect.Struct:
-			var data = NewStruct(v).Map()
+			var data map[string]any
+			bytes, err := json.Marshal(v)
+			if err != nil {
+				panic(err)
+			} else if err := json.Unmarshal(bytes, &data); err != nil {
+				panic(err)
+			}
 			result = append(result, e.rawPack(data)...)
+
 		case reflect.Slice, reflect.Array:
 			result = append(result, e.AppendByte(LIST_EXT)...)
 			result = append(result, e.AppendUint32(uint32(val.Len()))...)
