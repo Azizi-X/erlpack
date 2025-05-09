@@ -12,6 +12,13 @@ import (
 	"unsafe"
 )
 
+var (
+	AtomTrue  = []byte("true")
+	AtomFalse = []byte("false")
+	AtomNil   = []byte("nil")
+	AtomNull  = []byte("null")
+)
+
 const (
 	SMALL_INTEGER_EXT = 97
 	INTEGER_EXT       = 98
@@ -123,11 +130,11 @@ func (d *Decoder) decode() (any, error) {
 		}
 		raw, _ := d.read(length)
 		switch {
-		case bytes.Equal(raw, []byte("true")):
+		case bytes.Equal(raw, AtomTrue):
 			return true, nil
-		case bytes.Equal(raw, []byte("false")):
+		case bytes.Equal(raw, AtomFalse):
 			return false, nil
-		case bytes.Equal(raw, []byte("nil")), bytes.Equal(raw, []byte("null")):
+		case bytes.Equal(raw, AtomNil), bytes.Equal(raw, AtomNull):
 			return nil, nil
 		default:
 			return string(raw), nil
