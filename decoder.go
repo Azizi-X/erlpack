@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"reflect"
 	"strconv"
 )
 
@@ -278,6 +279,29 @@ func (d *Decoder) decodeList() (any, error) {
 	return array, nil
 }
 
+func keyToString(key any) string {
+	switch v := key.(type) {
+	case string:
+		return v
+	case int:
+		return strconv.Itoa(v)
+	case uint:
+		return strconv.FormatUint(uint64(v), 10)
+	case uint64:
+		return strconv.FormatUint(v, 10)
+	case int64:
+		return strconv.FormatInt(v, 10)
+	case bool:
+		return strconv.FormatBool(v)
+	case float32:
+		return strconv.FormatFloat(float64(v), 'f', -1, 32)
+	case float64:
+		return strconv.FormatFloat(v, 'f', -1, 64)
+	}
+
+	return reflect.ValueOf(key).String()
+}
+
 func (d *Decoder) decodeMap() (map[string]any, error) {
 	length, err := d.read32()
 	if err != nil {
@@ -297,7 +321,7 @@ func (d *Decoder) decodeMap() (map[string]any, error) {
 			return nil, err
 		}
 
-		resultMap[fmt.Sprint(key)] = value
+		resultMap[keyToString(key)] = value
 	}
 
 	return resultMap, nil
@@ -349,14 +373,16 @@ func (d *Decoder) decodeBig(digits uint32) (any, error) {
 		}
 	}
 
-	var outBuffer string
+	var buf []byte
+
 	if sign == 0 {
-		outBuffer = fmt.Sprintf("%d", value)
+		buf = strconv.AppendUint(buf, value, 10)
 	} else {
-		outBuffer = fmt.Sprintf("-%d", value)
+		buf = append(buf, '-')
+		buf = strconv.AppendUint(buf, value, 10)
 	}
 
-	return outBuffer, nil
+	return string(buf), nil
 }
 
 func (d *Decoder) decodeSmallBig() (any, error) {
