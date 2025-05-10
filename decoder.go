@@ -380,7 +380,9 @@ func (d *Decoder) unpack(data []byte) (any, error) {
 		return nil, errors.New("invalid or missing format version")
 	}
 	d.data = data[1:]
-	return d.decode()
+	bytes, err := d.decode()
+	d.reset()
+	return bytes, err
 }
 
 func (d *Decoder) decode() (any, error) {

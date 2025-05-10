@@ -3,7 +3,7 @@ package erlpack
 import (
 	"fmt"
 
-	"github.com/segmentio/encoding/json"
+	"github.com/goccy/go-json"
 )
 
 type Etf struct {
@@ -23,9 +23,7 @@ func (etf *Etf) Unpack(data []byte) (any, error) {
 		return nil, fmt.Errorf("etf is nil")
 	}
 
-	v, err := etf.unpack(data)
-	etf.reset()
-	return v, err
+	return etf.unpack(data)
 }
 
 func (etf *Etf) UnpackToBytes(data []byte) ([]byte, error) {
