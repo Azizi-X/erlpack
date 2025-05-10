@@ -299,7 +299,7 @@ func keyToString(key any) string {
 		return strconv.FormatFloat(v, 'f', -1, 64)
 	}
 
-	return reflect.ValueOf(key).String()
+	return reflect.ValueOf(key).Type().String()
 }
 
 func (d *Decoder) decodeMap() (map[string]any, error) {
