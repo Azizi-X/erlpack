@@ -10,6 +10,7 @@ import (
 	"math"
 	"reflect"
 	"strconv"
+	"sync"
 )
 
 var (
@@ -341,6 +342,12 @@ func (d *Decoder) decodeBinaryAsString() (string, error) {
 	return str, nil
 }
 
+var intBufPool = sync.Pool{
+	New: func() any {
+		return make([]byte, 0, 20)
+	},
+}
+
 func (d *Decoder) decodeBig(digits uint32) (any, error) {
 	sign, err := d.read8()
 	if err != nil {
@@ -373,13 +380,16 @@ func (d *Decoder) decodeBig(digits uint32) (any, error) {
 		}
 	}
 
-	var buf []byte
+	buf := intBufPool.Get().([]byte)
+	buf = buf[:0]
 
-	if sign == 0 {
-		buf = strconv.AppendUint(buf, value, 10)
-	} else {
+	if sign != 0 {
 		buf = append(buf, '-')
-		buf = strconv.AppendUint(buf, value, 10)
+	}
+	buf = strconv.AppendUint(buf, value, 10)
+
+	if cap(buf) == 20 {
+		intBufPool.Put(buf[:cap(buf)])
 	}
 
 	return string(buf), nil
