@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"strconv"
 	"sync"
+	"unsafe"
 )
 
 var (
@@ -57,7 +58,7 @@ func NewDecoder() *Decoder {
 
 func (d *Decoder) reset() {
 	d.offset = 0
-	d.data = []byte{}
+	d.data = nil
 }
 
 func (d *Decoder) read8() (uint8, error) {
@@ -119,7 +120,7 @@ func (d *Decoder) readString(length uint32) (string, error) {
 
 	bytes := d.data[d.offset : d.offset+int(length)]
 	d.offset += int(length)
-	return string(bytes), nil
+	return *(*string)(unsafe.Pointer(&bytes)), nil
 }
 
 func (d *Decoder) decodeFloat() (float64, error) {
@@ -156,17 +157,14 @@ func (d *Decoder) processAtom(atom string, length uint16) (any, error) {
 		return nil, nil
 	}
 
-	if length >= 3 && length <= 5 {
-		switch {
-		case length == 3 && atom == "nil":
-			return nil, nil
-		case length == 4 && atom == "null":
-			return nil, nil
-		case length == 4 && atom == "true":
-			return true, nil
-		case length == 5 && atom == "false":
-			return false, nil
-		}
+	if atom == "nil" {
+		return nil, nil
+	} else if atom == "null" {
+		return nil, nil
+	} else if atom == "true" {
+		return true, nil
+	} else if atom == "false" {
+		return false, nil
 	}
 
 	return atom, nil
@@ -200,7 +198,7 @@ func (d *Decoder) decodeSmallAtom() (any, error) {
 
 func (d *Decoder) decodeArray(length uint32) ([]any, error) {
 	array := make([]any, length)
-	for i := uint32(0); i < length; i++ {
+	for i := range length {
 		value, err := d.decode()
 		if err != nil {
 			return nil, err
@@ -246,7 +244,7 @@ func (d *Decoder) decodeStringAsList() ([]any, error) {
 
 	result := make([]any, length)
 
-	for i := uint16(0); i < length; i++ {
+	for i := range length {
 		value, err := d.decodeSmallInteger()
 		if err != nil {
 			return nil, err
@@ -311,7 +309,7 @@ func (d *Decoder) decodeMap() (map[string]any, error) {
 
 	resultMap := make(map[string]any, length)
 
-	for i := uint32(0); i < length; i++ {
+	for range length {
 		key, err := d.decode()
 		if err != nil {
 			return nil, err
@@ -360,7 +358,7 @@ func (d *Decoder) decodeBig(digits uint32) (any, error) {
 
 	var value uint64
 	var b uint64 = 1
-	for i := uint32(0); i < digits; i++ {
+	for range digits {
 		digit, err := d.read8()
 		if err != nil {
 			return nil, err
@@ -386,13 +384,16 @@ func (d *Decoder) decodeBig(digits uint32) (any, error) {
 	if sign != 0 {
 		buf = append(buf, '-')
 	}
+
 	buf = strconv.AppendUint(buf, value, 10)
 
-	if cap(buf) == 20 {
-		intBufPool.Put(buf[:cap(buf)])
+	result := *(*string)(unsafe.Pointer(&buf))
+
+	if cap(buf) <= 20 {
+		intBufPool.Put(buf)
 	}
 
-	return string(buf), nil
+	return result, nil
 }
 
 func (d *Decoder) decodeSmallBig() (any, error) {
