@@ -277,20 +277,43 @@ func (d *Decoder) decodeList() (any, error) {
 	return array, nil
 }
 
+func uint64ToString(v uint64) string {
+	buf := make([]byte, 20)
+
+	if v == 0 {
+		buf[0] = '0'
+		return *(*string)(unsafe.Pointer(&buf))
+	}
+
+	i := len(buf)
+	for v > 0 {
+		i--
+		buf[i] = byte(v%10) + '0'
+		v /= 10
+	}
+
+	result := buf[i:]
+
+	return *(*string)(unsafe.Pointer(&result))
+}
+
 func keyToString(key any) string {
 	switch v := key.(type) {
 	case string:
 		return v
 	case int:
-		return strconv.Itoa(v)
+		return uint64ToString(uint64(v))
 	case uint:
-		return strconv.FormatUint(uint64(v), 10)
+		return uint64ToString(uint64(v))
 	case uint64:
-		return strconv.FormatUint(v, 10)
+		return uint64ToString(v)
 	case int64:
-		return strconv.FormatInt(v, 10)
+		return uint64ToString(uint64(v))
 	case bool:
-		return strconv.FormatBool(v)
+		if v {
+			return "true"
+		}
+		return "false"
 	case float32:
 		return strconv.FormatFloat(float64(v), 'f', -1, 32)
 	case float64:
@@ -371,15 +394,11 @@ func (d *Decoder) decodeBig(digits uint32) (any, error) {
 		}
 	}
 
-	buf := []byte{}
-
 	if sign != 0 {
-		buf = append(buf, '-')
+		return "-" + uint64ToString(value), nil
 	}
 
-	buf = strconv.AppendUint(buf, value, 10)
-
-	return *(*string)(unsafe.Pointer(&buf)), nil
+	return uint64ToString(value), nil
 }
 
 func (d *Decoder) decodeSmallBig() (any, error) {

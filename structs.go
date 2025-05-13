@@ -10,16 +10,18 @@ import (
 )
 
 type Struct struct {
-	raw     any
-	value   reflect.Value
-	TagName string
+	raw      any
+	value    reflect.Value
+	TagName  string
+	Flattern bool
 }
 
 func NewStruct(s any) *Struct {
 	return &Struct{
-		raw:     s,
-		value:   strctVal(s),
-		TagName: "json",
+		raw:      s,
+		value:    strctVal(s),
+		TagName:  "json",
+		Flattern: true,
 	}
 }
 
@@ -120,7 +122,7 @@ func (s *Struct) FillMap(out map[string]any) {
 			continue
 		}
 
-		if isSubStruct && (tagOpts.Has("flatten")) {
+		if isSubStruct && tagOpts.Has("flatten") || (s.Flattern && field.Anonymous && field.Type.Kind() == reflect.Struct && len(tagOpts) == 0) {
 			for k := range finalVal.(map[string]any) {
 				out[k] = finalVal.(map[string]any)[k]
 			}

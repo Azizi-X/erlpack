@@ -115,7 +115,11 @@ func (e *Encoder) rawPack(value any) []byte {
 		result = append(result, e.AppendByte(NEW_FLOAT_EXT)...)
 		result = append(result, e.AppendFloat64(v)...)
 	case *string:
-		result = append(result, e.AppendBinary(*v)...)
+		if v == nil {
+			result = append(result, e.AppendNil()...)
+		} else {
+			result = append(result, e.AppendBinary(*v)...)
+		}
 	case string:
 		result = append(result, e.AppendBinary(v)...)
 	case bool:
