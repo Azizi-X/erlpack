@@ -3,6 +3,7 @@ package erlpack
 // https://github.com/fatih/structs
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"slices"
@@ -84,6 +85,17 @@ func (s *Struct) FillMap(out map[string]any) {
 		isSubStruct := false
 		var finalVal any
 
+		if val.CanInterface() {
+			if marshaler, ok := val.Interface().(json.Marshaler); ok {
+				if b, err := marshaler.MarshalJSON(); err == nil {
+					var temp any
+					if err := json.Unmarshal(b, &temp); err == nil {
+						val = reflect.ValueOf(temp)
+					}
+				}
+			}
+		}
+
 		tagName, tagOpts := parseTag(field.Tag.Get(s.TagName))
 		if tagName != "" {
 			name = tagName
@@ -94,6 +106,12 @@ func (s *Struct) FillMap(out map[string]any) {
 			current := val.Interface()
 
 			if reflect.DeepEqual(current, zero) {
+				continue
+			}
+		}
+
+		if tagOpts.Has("omitzero") {
+			if s.isZeroValue(val) {
 				continue
 			}
 		}
@@ -129,6 +147,57 @@ func (s *Struct) FillMap(out map[string]any) {
 		} else {
 			out[name] = finalVal
 		}
+	}
+}
+
+func (s *Struct) isZeroValue(v reflect.Value) bool {
+	if !v.IsValid() {
+		return true
+	}
+
+	for v.Kind() == reflect.Ptr || v.Kind() == reflect.Interface {
+		if v.IsNil() {
+			return true
+		}
+		v = v.Elem()
+	}
+
+	if v.CanInterface() {
+		if method := v.MethodByName("IsZero"); method.IsValid() && method.Type().NumIn() == 0 && method.Type().NumOut() == 1 {
+			if method.Type().Out(0).Kind() == reflect.Bool {
+				result := method.Call(nil)
+				return result[0].Bool()
+			}
+		}
+	}
+
+	switch v.Kind() {
+	case reflect.Ptr, reflect.Interface:
+		if v.IsNil() {
+			return true
+		}
+		return s.isZeroValue(v.Elem())
+
+	case reflect.Struct:
+		for i := range v.NumField() {
+			field := v.Field(i)
+			if !s.isZeroValue(field) {
+				return false
+			}
+		}
+		return true
+
+	case reflect.Array, reflect.Slice:
+		for i := range v.Len() {
+			if !s.isZeroValue(v.Index(i)) {
+				return false
+			}
+		}
+		return true
+	case reflect.Map:
+		return v.Len() == 0
+	default:
+		return v.IsZero()
 	}
 }
 
