@@ -3,6 +3,8 @@ package erlpack
 // https://github.com/fatih/structs
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -199,6 +201,65 @@ func (s *Struct) isZeroValue(v reflect.Value) bool {
 	default:
 		return v.IsZero()
 	}
+}
+
+func (s *Struct) Exported() []string {
+	t := reflect.TypeOf(s.raw)
+	for t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+
+	var exported = []string{}
+	for i := range t.NumField() {
+		f := t.Field(i)
+
+		if !f.IsExported() {
+			continue
+		}
+
+		parts := strings.Split(f.Tag.Get("json"), ",")
+		if len(parts) == 0 {
+			continue
+		}
+
+		jsonTag := parts[0]
+		if jsonTag == "-" || jsonTag == "" {
+			continue
+		}
+
+		exported = append(exported, jsonTag)
+	}
+
+	return exported
+}
+
+func (s *Struct) Hash() string {
+	var b strings.Builder
+	t := reflect.TypeOf(s.raw)
+	for t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	for i := range t.NumField() {
+		f := t.Field(i)
+
+		if !f.IsExported() {
+			continue
+		}
+
+		parts := strings.Split(f.Tag.Get("json"), ",")
+		if len(parts) == 0 {
+			continue
+		}
+
+		jsonTag := parts[0]
+		if jsonTag == "-" || jsonTag == "" {
+			continue
+		}
+
+		fmt.Fprintf(&b, "%s:%s:%s;", f.Name, f.Type.String(), jsonTag)
+	}
+	sum := sha256.Sum256([]byte(b.String()))
+	return hex.EncodeToString(sum[:])[:16]
 }
 
 func (s *Struct) Map() map[string]any {
