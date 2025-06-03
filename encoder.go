@@ -13,17 +13,17 @@ func NewEncoder() *Encoder {
 	return &Encoder{}
 }
 
-func (e *Encoder) AppendByte(b byte) []byte {
+func (*Encoder) AppendByte(b byte) []byte {
 	return append([]byte{}, b)
 }
 
-func (e *Encoder) AppendUint32(val uint32) []byte {
+func (*Encoder) AppendUint32(val uint32) []byte {
 	buf := make([]byte, 4)
 	binary.BigEndian.PutUint32(buf, val)
 	return buf
 }
 
-func (e *Encoder) AppendUint16(val uint16) []byte {
+func (*Encoder) AppendUint16(val uint16) []byte {
 	buf := make([]byte, 2)
 	binary.BigEndian.PutUint16(buf, val)
 	return buf
@@ -36,13 +36,13 @@ func (e *Encoder) AppendBinary(s string) []byte {
 	return result
 }
 
-func (e *Encoder) AppendFloat64(f float64) []byte {
+func (*Encoder) AppendFloat64(f float64) []byte {
 	buf := make([]byte, 8)
 	binary.BigEndian.PutUint64(buf, math.Float64bits(f))
 	return buf
 }
 
-func (e *Encoder) AppendFloat32(f float32) []byte {
+func (*Encoder) AppendFloat32(f float32) []byte {
 	buf := make([]byte, 4)
 	binary.BigEndian.PutUint32(buf, math.Float32bits(f))
 	return buf
@@ -60,13 +60,13 @@ func (e *Encoder) AppendInt(v int64) []byte {
 	}
 }
 
-func (e *Encoder) AppendInt32(v int32) []byte {
+func (*Encoder) AppendInt32(v int32) []byte {
 	buf := make([]byte, 4)
 	binary.BigEndian.PutUint32(buf, uint32(v))
 	return buf
 }
 
-func (e *Encoder) AppendInt64(v int64) []byte {
+func (*Encoder) AppendInt64(v int64) []byte {
 	buf := make([]byte, 8)
 	binary.BigEndian.PutUint64(buf, uint64(v))
 	return buf
@@ -82,16 +82,28 @@ func (e *Encoder) AppendMap(m map[string]any) []byte {
 	return result
 }
 
-func (e *Encoder) AppendNil() []byte {
+func (*Encoder) AppendNil() []byte {
 	return []byte{SMALL_ATOM_EXT, 3, 'n', 'i', 'l'}
 }
 
-func (e *Encoder) AppendBool(v bool) []byte {
+func (*Encoder) AppendBool(v bool) []byte {
 	if v {
 		return []byte{SMALL_ATOM_EXT, 4, 't', 'r', 'u', 'e'}
 	}
 
 	return []byte{SMALL_ATOM_EXT, 5, 'f', 'a', 'l', 's', 'e'}
+}
+
+func (*Encoder) convertMap(x any) (map[string]any, bool) {
+	v := reflect.ValueOf(x)
+	if v.Kind() != reflect.Map {
+		return nil, false
+	}
+	out := make(map[string]any, v.Len())
+	for _, key := range v.MapKeys() {
+		out[key.String()] = v.MapIndex(key).Interface()
+	}
+	return out, true
 }
 
 func (e *Encoder) pack(value any) []byte {
@@ -144,7 +156,16 @@ func (e *Encoder) rawPack(value any) []byte {
 			val = val.Elem()
 		}
 
-		switch t.Kind() {
+		kind := t.Kind()
+
+		if kind == reflect.Map {
+			v, ok := e.convertMap(v)
+			if ok {
+				return e.AppendMap(v)
+			}
+		}
+
+		switch kind {
 		case reflect.Struct:
 			var data = NewStruct(v).Map()
 			result = append(result, e.rawPack(data)...)
