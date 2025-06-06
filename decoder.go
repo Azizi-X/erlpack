@@ -151,22 +151,22 @@ func (d *Decoder) decodeNewFloat() (float64, error) {
 	return math.Float64frombits(ui64), nil
 }
 
-func (d *Decoder) processAtom(atom string) (any, error) {
+func (d *Decoder) processAtom(atom string) any {
 	if atom == "" {
-		return nil, nil
+		return nil
 	}
 
 	if atom == "nil" {
-		return nil, nil
+		return nil
 	} else if atom == "null" {
-		return nil, nil
+		return nil
 	} else if atom == "true" {
-		return true, nil
+		return true
 	} else if atom == "false" {
-		return false, nil
+		return false
 	}
 
-	return atom, nil
+	return atom
 }
 
 func (d *Decoder) decodeAtom() (any, error) {
@@ -179,7 +179,7 @@ func (d *Decoder) decodeAtom() (any, error) {
 		return nil, err
 	}
 
-	return d.processAtom(atom)
+	return d.processAtom(atom), nil
 }
 
 func (d *Decoder) decodeSmallAtom() (any, error) {
@@ -192,7 +192,7 @@ func (d *Decoder) decodeSmallAtom() (any, error) {
 		return nil, err
 	}
 
-	return d.processAtom(atom)
+	return d.processAtom(atom), nil
 }
 
 func (d *Decoder) decodeArray(length uint32) ([]any, error) {
