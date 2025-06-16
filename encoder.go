@@ -116,6 +116,12 @@ func (e *Encoder) rawPack(value any) []byte {
 	switch v := value.(type) {
 	case int:
 		result = append(result, e.AppendInt(int64(v))...)
+	case *int:
+		if v == nil {
+			result = append(result, e.AppendNil()...)
+		} else {
+			result = append(result, e.AppendInt(int64(*v))...)
+		}
 	case int32:
 		result = append(result, e.AppendInt(int64(v))...)
 	case int64:
