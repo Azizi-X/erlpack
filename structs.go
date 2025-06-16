@@ -203,21 +203,29 @@ func (s *Struct) isZeroValue(v reflect.Value) bool {
 	}
 }
 
-func (s *Struct) Exported() []string {
-	t := reflect.TypeOf(s.raw)
+func (s *Struct) Exported() map[string]any {
+	return collectExportedFields(reflect.TypeOf(s.raw))
+}
+func collectExportedFields(t reflect.Type) map[string]any {
 	for t.Kind() == reflect.Ptr {
 		t = t.Elem()
 	}
 
-	var exported = []string{}
-	for i := range t.NumField() {
+	if t.Kind() != reflect.Struct {
+		return nil
+	}
+
+	result := make(map[string]any)
+
+	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
 
 		if !f.IsExported() {
 			continue
 		}
 
-		parts := strings.Split(f.Tag.Get("json"), ",")
+		tag := f.Tag.Get("json")
+		parts := strings.Split(tag, ",")
 		if len(parts) == 0 {
 			continue
 		}
@@ -227,18 +235,38 @@ func (s *Struct) Exported() []string {
 			continue
 		}
 
-		exported = append(exported, jsonTag)
+		ft := f.Type
+		for ft.Kind() == reflect.Ptr {
+			ft = ft.Elem()
+		}
+
+		if ft.Kind() == reflect.Struct {
+			m := collectExportedFields(ft)
+			if len(m) == 0 {
+				result[jsonTag] = nil
+			} else {
+				result[jsonTag] = m
+			}
+		} else {
+			result[jsonTag] = nil
+		}
 	}
 
-	return exported
+	return result
 }
 
 func (s *Struct) Hash() string {
 	var b strings.Builder
-	t := reflect.TypeOf(s.raw)
+	s.hashStruct(reflect.TypeOf(s.raw), &b)
+	sum := sha256.Sum256([]byte(b.String()))
+	return hex.EncodeToString(sum[:])[:16]
+}
+
+func (s *Struct) hashStruct(t reflect.Type, b *strings.Builder) {
 	for t.Kind() == reflect.Ptr {
 		t = t.Elem()
 	}
+
 	for i := range t.NumField() {
 		f := t.Field(i)
 
@@ -256,10 +284,17 @@ func (s *Struct) Hash() string {
 			continue
 		}
 
-		fmt.Fprintf(&b, "%s:%s:%s;", f.Name, f.Type.String(), jsonTag)
+		fmt.Fprintf(b, "%s:%s:%s;", f.Name, f.Type.String(), jsonTag)
+
+		ft := f.Type
+		for ft.Kind() == reflect.Ptr {
+			ft = ft.Elem()
+		}
+
+		if ft.Kind() == reflect.Struct {
+			s.hashStruct(ft, b)
+		}
 	}
-	sum := sha256.Sum256([]byte(b.String()))
-	return hex.EncodeToString(sum[:])[:16]
 }
 
 func (s *Struct) Map() map[string]any {
