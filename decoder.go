@@ -1,23 +1,11 @@
 package erlpack
 
 import (
-	"bytes"
-	"compress/zlib"
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
 	"math"
-	"reflect"
 	"strconv"
-	"unsafe"
-)
-
-var (
-	AtomTrue  = []byte("true")
-	AtomFalse = []byte("false")
-	AtomNil   = []byte("nil")
-	AtomNull  = []byte("null")
 )
 
 const (
@@ -35,13 +23,7 @@ const (
 	BINARY_EXT        = 109
 	SMALL_BIG_EXT     = 110
 	LARGE_BIG_EXT     = 111
-	REFERENCE_EXT     = 101
-	NEW_REFERENCE_EXT = 114
-	PORT_EXT          = 102
-	PID_EXT           = 103
-	EXPORT_EXT        = 113
 	NEW_FLOAT_EXT     = 70
-	COMPRESSED        = 80
 
 	FORMAT_VERSION = 131
 )
@@ -49,327 +31,326 @@ const (
 type Decoder struct {
 	data   []byte
 	offset int
+	buf    []byte
 }
 
-func NewDecoder() *Decoder {
-	return &Decoder{}
+func NewDecoder(bufSize int) *Decoder {
+	return &Decoder{
+		buf: make([]byte, 0, bufSize),
+	}
 }
 
-func (d *Decoder) reset() {
-	d.offset = 0
-	d.data = nil
-}
+func (d *Decoder) resetState() { d.offset = 0; d.data = nil }
 
 func (d *Decoder) read8() (uint8, error) {
 	if d.offset+1 > len(d.data) {
-		return 0, fmt.Errorf("reading a byte exceeds buffer size")
+		return 0, errors.New("read8 out of bounds")
 	}
-	val := d.data[d.offset]
+	v := d.data[d.offset]
 	d.offset++
-	return val, nil
+	return v, nil
 }
 
 func (d *Decoder) read16() (uint16, error) {
 	if d.offset+2 > len(d.data) {
-		return 0, fmt.Errorf("reading two bytes exceeds buffer size")
+		return 0, errors.New("read16 out of bounds")
 	}
-	val := binary.BigEndian.Uint16(d.data[d.offset:])
+	v := binary.BigEndian.Uint16(d.data[d.offset:])
 	d.offset += 2
-	return val, nil
+	return v, nil
 }
 
 func (d *Decoder) read32() (uint32, error) {
 	if d.offset+4 > len(d.data) {
-		return 0, fmt.Errorf("reading four bytes exceeds buffer size")
+		return 0, errors.New("read32 out of bounds")
 	}
-	val := binary.BigEndian.Uint32(d.data[d.offset:])
+	v := binary.BigEndian.Uint32(d.data[d.offset:])
 	d.offset += 4
-	return val, nil
+	return v, nil
 }
 
 func (d *Decoder) read64() (uint64, error) {
 	if d.offset+8 > len(d.data) {
-		return 0, fmt.Errorf("reading eight bytes exceeds buffer size")
+		return 0, errors.New("read64 out of bounds")
 	}
-	val := binary.BigEndian.Uint64(d.data[d.offset:])
+	v := binary.BigEndian.Uint64(d.data[d.offset:])
 	d.offset += 8
-	return val, nil
+	return v, nil
 }
 
-func (d *Decoder) decodeSmallInteger() (int, error) {
-	val, err := d.read8()
-	if err != nil {
-		return 0, err
+func (d *Decoder) readBytes(n uint32) ([]byte, error) {
+	if d.offset+int(n) > len(d.data) {
+		return nil, errors.New("readBytes out of bounds")
 	}
-	return int(val), nil
+	b := d.data[d.offset : d.offset+int(n)]
+	d.offset += int(n)
+	return b, nil
 }
 
-func (d *Decoder) decodeInteger() (int32, error) {
-	val, err := d.read32()
-	if err != nil {
-		return 0, err
+func (d *Decoder) writeQuotedASCII(s []byte) {
+	d.buf = append(d.buf, '"')
+	for _, c := range s {
+		if c != '\\' && c != '"' {
+			d.buf = append(d.buf, c)
+		} else {
+			d.buf = append(d.buf, '\\', c)
+		}
 	}
-	return int32(val), nil
+	d.buf = append(d.buf, '"')
 }
 
-func (d *Decoder) readString(length uint32) (string, error) {
-	if int(d.offset)+int(length) > len(d.data) {
-		return "", fmt.Errorf("reading sequence past the end of the buffer")
+func (d *Decoder) writeAtom(b []byte) {
+	switch len(b) {
+	case 3:
+		if b[0] == 'n' && b[1] == 'i' && b[2] == 'l' {
+			d.buf = append(d.buf, 'n', 'u', 'l', 'l')
+			return
+		}
+	case 4:
+		if b[0] == 't' && b[1] == 'r' && b[2] == 'u' && b[3] == 'e' {
+			d.buf = append(d.buf, 't', 'r', 'u', 'e')
+			return
+		}
+		if b[0] == 'n' && b[1] == 'u' && b[2] == 'l' && b[3] == 'l' {
+			d.buf = append(d.buf, 'n', 'u', 'l', 'l')
+			return
+		}
+	case 5:
+		if b[0] == 'f' && b[1] == 'a' && b[2] == 'l' && b[3] == 's' && b[4] == 'e' {
+			d.buf = append(d.buf, 'f', 'a', 'l', 's', 'e')
+			return
+		}
 	}
-
-	bytes := d.data[d.offset : d.offset+int(length)]
-	d.offset += int(length)
-	return *(*string)(unsafe.Pointer(&bytes)), nil
+	d.writeQuotedASCII(b)
 }
 
-func (d *Decoder) decodeFloat() (float64, error) {
-	const floatLength = 31
-
-	str, err := d.readString(floatLength)
+func (d *Decoder) decodeSmallInteger() error {
+	v, err := d.read8()
 	if err != nil {
-		return 0, err
+		return err
 	}
-
-	if i := bytes.IndexByte([]byte(str), 0); i >= 0 {
-		str = str[:i]
-	}
-
-	number, err := strconv.ParseFloat(str, 64)
-	if err != nil {
-		return 0, fmt.Errorf("invalid float encoded: %w", err)
-	}
-
-	return number, nil
+	d.buf = strconv.AppendUint(d.buf, uint64(v), 10)
+	return nil
 }
 
-func (d *Decoder) decodeNewFloat() (float64, error) {
-	ui64, err := d.read64()
+func (d *Decoder) decodeInteger() error {
+	v, err := d.read32()
 	if err != nil {
-		return 0, err
+		return err
 	}
-
-	return math.Float64frombits(ui64), nil
+	d.buf = strconv.AppendUint(d.buf, uint64(v), 10)
+	return nil
 }
 
-func (d *Decoder) processAtom(atom string) any {
-	if atom == "" {
-		return nil
+func (d *Decoder) decodeNewFloat() error {
+	v, err := d.read64()
+	if err != nil {
+		return err
 	}
-
-	if atom == "nil" {
-		return nil
-	} else if atom == "null" {
-		return nil
-	} else if atom == "true" {
-		return true
-	} else if atom == "false" {
-		return false
-	}
-
-	return atom
+	d.buf = strconv.AppendFloat(d.buf, math.Float64frombits(v), 'f', -1, 64)
+	return nil
 }
 
-func (d *Decoder) decodeAtom() (any, error) {
-	length, err := d.read16()
+func (d *Decoder) decodeAtom() error {
+	l, err := d.read16()
 	if err != nil {
-		return nil, err
+		return err
 	}
-	atom, err := d.readString(uint32(length))
+	b, err := d.readBytes(uint32(l))
 	if err != nil {
-		return nil, err
+		return err
 	}
-
-	return d.processAtom(atom), nil
+	d.writeAtom(b)
+	return nil
 }
 
-func (d *Decoder) decodeSmallAtom() (any, error) {
-	length, err := d.read8()
+func (d *Decoder) decodeSmallAtom() error {
+	l, err := d.read8()
 	if err != nil {
-		return nil, err
+		return err
 	}
-	atom, err := d.readString(uint32(length))
+	b, err := d.readBytes(uint32(l))
 	if err != nil {
-		return nil, err
+		return err
 	}
-
-	return d.processAtom(atom), nil
+	d.writeAtom(b)
+	return nil
 }
 
-func (d *Decoder) decodeArray(length uint32) ([]any, error) {
-	array := make([]any, length)
-	for i := range length {
-		value, err := d.decode()
+func (d *Decoder) decodeString() error {
+	l, err := d.read16()
+	if err != nil {
+		return err
+	}
+	b, err := d.readBytes(uint32(l))
+	if err != nil {
+		return err
+	}
+	d.writeQuotedASCII(b)
+	return nil
+}
+
+func (d *Decoder) decodeBinary() error {
+	l, err := d.read32()
+	if err != nil {
+		return err
+	}
+	b, err := d.readBytes(l)
+	if err != nil {
+		return err
+	}
+	d.writeQuotedASCII(b)
+	return nil
+}
+
+func (d *Decoder) decodeArray(n uint32) error {
+	d.buf = append(d.buf, '[')
+	for i := uint32(0); i < n; i++ {
+		if i > 0 {
+			d.buf = append(d.buf, ',')
+		}
+		if err := d.decode(); err != nil {
+			return err
+		}
+	}
+	d.buf = append(d.buf, ']')
+	return nil
+}
+
+func (d *Decoder) decodeNil() error {
+	d.buf = append(d.buf, '[', ']')
+	return nil
+}
+
+func (d *Decoder) decodeList() error {
+	l, err := d.read32()
+	if err != nil {
+		return err
+	}
+	if err := d.decodeArray(l); err != nil {
+		return err
+	}
+	tail, err := d.read8()
+	if err != nil || tail != NIL_EXT {
+		return errors.New("list tail missing")
+	}
+	return nil
+}
+
+func (d *Decoder) decodeMap() error {
+	l, err := d.read32()
+	if err != nil {
+		return err
+	}
+	d.buf = append(d.buf, '{')
+	for i := range l {
+		if i > 0 {
+			d.buf = append(d.buf, ',')
+		}
+		key, err := d.decodeKey()
 		if err != nil {
-			return nil, err
+			return err
 		}
-		array[i] = value
-	}
-	return array, nil
-}
-
-func (d *Decoder) decodeTuple(length uint32) ([]any, error) {
-	return d.decodeArray(length)
-}
-
-func (d *Decoder) decodeSmallTuple() ([]any, error) {
-	length, err := d.read8()
-	if err != nil {
-		return nil, err
-	}
-	return d.decodeTuple(uint32(length))
-}
-
-func (d *Decoder) decodeLargeTuple() ([]any, error) {
-	length, err := d.read32()
-	if err != nil {
-		return nil, err
-	}
-	return d.decodeTuple(length)
-}
-
-func (d *Decoder) decodeNil() ([]any, error) {
-	return []any{}, nil
-}
-
-func (d *Decoder) decodeStringAsList() ([]any, error) {
-	length, err := d.read16()
-	if err != nil {
-		return nil, err
-	}
-
-	if d.offset+int(length) > len(d.data) {
-		return nil, fmt.Errorf("reading sequence past the end of the buffer (1)")
-	}
-
-	result := make([]any, length)
-
-	for i := range length {
-		value, err := d.decodeSmallInteger()
-		if err != nil {
-			return nil, err
+		d.writeQuotedASCII(key)
+		d.buf = append(d.buf, ':')
+		if err := d.decode(); err != nil {
+			return err
 		}
-		result[i] = value
 	}
-
-	return result, nil
+	d.buf = append(d.buf, '}')
+	return nil
 }
 
-func (d *Decoder) decodeList() (any, error) {
-	length, err := d.read32()
+func (d *Decoder) decodeKey() ([]byte, error) {
+	tag, err := d.read8()
 	if err != nil {
 		return nil, err
 	}
 
-	array, err := d.decodeArray(length)
-	if err != nil {
-		return nil, err
-	}
-
-	tailMarker, err := d.read8()
-	if err != nil {
-		return nil, err
-	}
-
-	if tailMarker != NIL_EXT {
-		return nil, fmt.Errorf("list doesn't end with a tail marker, but it must")
-	}
-
-	return array, nil
-}
-
-func uint64ToString(v uint64) string {
-	buf := make([]byte, 20)
-
-	if v == 0 {
-		buf[0] = '0'
-		return *(*string)(unsafe.Pointer(&buf))
-	}
-
-	i := len(buf)
-	for v > 0 {
-		i--
-		buf[i] = byte(v%10) + '0'
-		v /= 10
-	}
-
-	result := buf[i:]
-
-	return *(*string)(unsafe.Pointer(&result))
-}
-
-func keyToString(key any) string {
-	switch v := key.(type) {
-	case string:
-		return v
-	case int:
-		return uint64ToString(uint64(v))
-	case uint:
-		return uint64ToString(uint64(v))
-	case uint64:
-		return uint64ToString(v)
-	case int64:
-		return uint64ToString(uint64(v))
-	case bool:
-		if v {
-			return "true"
-		}
-		return "false"
-	case float32:
-		return strconv.FormatFloat(float64(v), 'f', -1, 32)
-	case float64:
-		return strconv.FormatFloat(v, 'f', -1, 64)
-	}
-
-	return reflect.ValueOf(key).Type().String()
-}
-
-func (d *Decoder) decodeMap() (map[string]any, error) {
-	length, err := d.read32()
-	if err != nil {
-		return nil, err
-	}
-
-	resultMap := make(map[string]any, length)
-
-	for range length {
-		key, err := d.decode()
+	switch tag {
+	case ATOM_EXT:
+		l, _ := d.read16()
+		return d.readBytes(uint32(l))
+	case SMALL_ATOM_EXT:
+		l, _ := d.read8()
+		return d.readBytes(uint32(l))
+	case BINARY_EXT:
+		l, _ := d.read32()
+		return d.readBytes(l)
+	case STRING_EXT:
+		l, _ := d.read16()
+		return d.readBytes(uint32(l))
+	case SMALL_INTEGER_EXT:
+		_, err := d.read8()
 		if err != nil {
 			return nil, err
 		}
 
-		value, err := d.decode()
-		if err != nil {
-			return nil, err
-		}
-
-		resultMap[keyToString(key)] = value
+		return d.data[d.offset-1 : d.offset], nil
+	default:
+		return nil, errors.New("unsupported key tag: " + strconv.Itoa(int(tag)))
 	}
-
-	return resultMap, nil
 }
 
-func (d *Decoder) decodeBinaryAsString() (string, error) {
-	length, err := d.read32()
+func (d *Decoder) decodeSmallBig() error {
+	bytes, err := d.read8()
 	if err != nil {
-		return "", err
+		return err
 	}
-
-	str, err := d.readString(uint32(length))
-	if err != nil {
-		return "", err
-	}
-
-	return str, nil
+	return d.decodeBig(uint32(bytes))
 }
 
-func (d *Decoder) decodeBig(digits uint32) (any, error) {
+func (d *Decoder) decodeLargeBig() error {
+	bytes, err := d.read32()
+	if err != nil {
+		return err
+	}
+	return d.decodeBig(bytes)
+}
+
+func (d *Decoder) decode() error {
+	tag, err := d.read8()
+	if err != nil {
+		return err
+	}
+	switch tag {
+	case SMALL_INTEGER_EXT:
+		return d.decodeSmallInteger()
+	case INTEGER_EXT:
+		return d.decodeInteger()
+	case NEW_FLOAT_EXT:
+		return d.decodeNewFloat()
+	case ATOM_EXT:
+		return d.decodeAtom()
+	case SMALL_ATOM_EXT:
+		return d.decodeSmallAtom()
+	case STRING_EXT:
+		return d.decodeString()
+	case LIST_EXT:
+		return d.decodeList()
+	case MAP_EXT:
+		return d.decodeMap()
+	case NIL_EXT:
+		return d.decodeNil()
+	case BINARY_EXT:
+		return d.decodeBinary()
+	case SMALL_BIG_EXT:
+		return d.decodeSmallBig()
+	case LARGE_BIG_EXT:
+		return d.decodeLargeBig()
+	default:
+		return errors.New("unsupported tag: " + strconv.Itoa(int(tag)))
+	}
+}
+
+func (d *Decoder) decodeBig(digits uint32) error {
 	sign, err := d.read8()
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	if digits > 8 {
-		return nil, fmt.Errorf("Unable to decode big ints larger than 8 bytes")
+		return fmt.Errorf("unable to decode big ints larger than 8 bytes")
 	}
 
 	var value uint64
@@ -377,7 +358,7 @@ func (d *Decoder) decodeBig(digits uint32) (any, error) {
 	for range digits {
 		digit, err := d.read8()
 		if err != nil {
-			return nil, err
+			return err
 		}
 		value += uint64(digit) * b
 		b <<= 8
@@ -385,117 +366,35 @@ func (d *Decoder) decodeBig(digits uint32) (any, error) {
 
 	if digits <= 4 {
 		if sign == 0 {
-			return uint32(value), nil
+			d.buf = strconv.AppendUint(d.buf, value, 10)
+			return nil
 		}
-
-		if value&(1<<31) == 0 {
-			negativeValue := -int32(value)
-			return negativeValue, nil
-		}
+		d.buf = strconv.AppendInt(d.buf, -int64(value), 10)
+		return nil
 	}
+
+	d.buf = append(d.buf, '"')
 
 	if sign != 0 {
-		return "-" + uint64ToString(value), nil
+		d.buf = append(d.buf, '-')
 	}
 
-	return uint64ToString(value), nil
+	d.buf = strconv.AppendUint(d.buf, value, 10)
+	d.buf = append(d.buf, '"')
+
+	return nil
 }
 
-func (d *Decoder) decodeSmallBig() (any, error) {
-	bytes, err := d.read8()
-	if err != nil {
-		return nil, err
-	}
-	return d.decodeBig(uint32(bytes))
-}
-
-func (d *Decoder) decodeLargeBig() (any, error) {
-	bytes, err := d.read32()
-	if err != nil {
-		return nil, err
-	}
-	return d.decodeBig(bytes)
-}
-
-func (d *Decoder) unpack(data []byte) (any, error) {
+func (d *Decoder) unpack(data []byte) ([]byte, error) {
 	if len(data) == 0 || data[0] != FORMAT_VERSION {
-		return nil, errors.New("invalid or missing format version")
+		return nil, errors.New("invalid format")
 	}
 	d.data = data[1:]
-	bytes, err := d.decode()
-	d.reset()
-	return bytes, err
-}
-
-func (d *Decoder) decode() (any, error) {
-	tag, err := d.read8()
-	if err != nil {
+	d.offset = 0
+	d.buf = d.buf[:0]
+	if err := d.decode(); err != nil {
+		d.resetState()
 		return nil, err
 	}
-
-	switch tag {
-	case SMALL_INTEGER_EXT:
-		return d.decodeSmallInteger()
-	case INTEGER_EXT:
-		return d.decodeInteger()
-	case FLOAT_EXT:
-		return d.decodeFloat()
-	case NEW_FLOAT_EXT:
-		return d.decodeNewFloat()
-	case ATOM_EXT:
-		return d.decodeAtom()
-	case SMALL_ATOM_EXT:
-		return d.decodeSmallAtom()
-	case SMALL_TUPLE_EXT:
-		return d.decodeSmallTuple()
-	case LARGE_TUPLE_EXT:
-		return d.decodeLargeTuple()
-	case NIL_EXT:
-		return d.decodeNil()
-	case STRING_EXT:
-		return d.decodeStringAsList()
-	case LIST_EXT:
-		return d.decodeList()
-	case MAP_EXT:
-		return d.decodeMap()
-	case BINARY_EXT:
-		return d.decodeBinaryAsString()
-	case SMALL_BIG_EXT:
-		return d.decodeSmallBig()
-	case LARGE_BIG_EXT:
-		return d.decodeLargeBig()
-	case COMPRESSED:
-		return d.decodeCompressed()
-	default:
-		return nil, fmt.Errorf("unsupported tag: %d", tag)
-	}
-}
-
-func (d *Decoder) decodeCompressed() (any, error) {
-	uncompressedSize, err := d.read32()
-	if err != nil {
-		return nil, err
-	}
-
-	outBuffer := make([]byte, uncompressedSize)
-
-	reader, err := zlib.NewReader(bytes.NewReader(d.data[d.offset:]))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create zlib reader: %w", err)
-	}
-	defer reader.Close()
-
-	_, err = io.ReadFull(reader, outBuffer)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decompress data: %w", err)
-	}
-
-	d.offset += len(outBuffer)
-
-	value, err := d.unpack(outBuffer)
-	if err != nil {
-		return nil, err
-	}
-
-	return value, nil
+	return d.buf, nil
 }
