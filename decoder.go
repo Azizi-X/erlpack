@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math"
 	"strconv"
-	"unsafe"
 )
 
 const (
@@ -39,7 +38,6 @@ type Decoder struct {
 func NewDecoder(bufSize int) *Decoder {
 	return &Decoder{
 		bufSize: bufSize,
-		buf:     make([]byte, 0, bufSize),
 	}
 }
 
@@ -393,19 +391,8 @@ func (d *Decoder) unpack(data []byte) ([]byte, error) {
 
 	d.data = data[1:]
 	d.offset = 0
+	d.buf = make([]byte, 0, d.bufSize)
 
-	newBuf := &struct {
-		Data uintptr
-		Len  int
-		Cap  int
-	}{}
-	sliceHeader := (*[3]uintptr)(unsafe.Pointer(&d.buf))
-	newBuf.Data = sliceHeader[0]
-	newBuf.Len = 0
-	newBuf.Cap = int(sliceHeader[2])
-
-	// d.buf = d.buf[:0]
-	// d.buf = make([]byte, 0, d.bufSize)
 	if err := d.decode(); err != nil {
 		return nil, err
 	}
