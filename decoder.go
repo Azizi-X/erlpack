@@ -205,7 +205,7 @@ func (d *Decoder) decodeBinary() error {
 
 func (d *Decoder) decodeArray(n uint32) error {
 	d.buf = append(d.buf, '[')
-	for i := uint32(0); i < n; i++ {
+	for i := range n {
 		if i > 0 {
 			d.buf = append(d.buf, ',')
 		}
