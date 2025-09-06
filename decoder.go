@@ -29,18 +29,17 @@ const (
 )
 
 type Decoder struct {
-	data   []byte
-	offset int
-	buf    []byte
+	data    []byte
+	offset  int
+	buf     []byte
+	bufSize int
 }
 
 func NewDecoder(bufSize int) *Decoder {
 	return &Decoder{
-		buf: make([]byte, 0, bufSize),
+		bufSize: bufSize,
 	}
 }
-
-func (d *Decoder) resetState() { d.offset = 0; d.data = nil }
 
 func (d *Decoder) read8() (uint8, error) {
 	if d.offset+1 > len(d.data) {
@@ -391,9 +390,8 @@ func (d *Decoder) unpack(data []byte) ([]byte, error) {
 	}
 	d.data = data[1:]
 	d.offset = 0
-	d.buf = d.buf[:0]
+	d.buf = make([]byte, 0, d.bufSize)
 	if err := d.decode(); err != nil {
-		d.resetState()
 		return nil, err
 	}
 	return d.buf, nil
