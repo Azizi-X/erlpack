@@ -88,7 +88,7 @@ func (d *Decoder) readBytes(n uint32) ([]byte, error) {
 	return b, nil
 }
 
-func (d *Decoder) writeQuotedASCII(s []byte) {
+func (d *Decoder) writeJsonASCII(s []byte) {
 	d.buf = append(d.buf, '"')
 	for _, c := range s {
 		switch c {
@@ -138,7 +138,7 @@ func (d *Decoder) writeAtom(b []byte) {
 			return
 		}
 	}
-	d.writeQuotedASCII(b)
+	d.writeJsonASCII(b)
 }
 
 func (d *Decoder) decodeSmallInteger() error {
@@ -203,7 +203,7 @@ func (d *Decoder) decodeString() error {
 	if err != nil {
 		return err
 	}
-	d.writeQuotedASCII(b)
+	d.writeJsonASCII(b)
 	return nil
 }
 
@@ -216,7 +216,7 @@ func (d *Decoder) decodeBinary() error {
 	if err != nil {
 		return err
 	}
-	d.writeQuotedASCII(b)
+	d.writeJsonASCII(b)
 	return nil
 }
 
@@ -268,7 +268,7 @@ func (d *Decoder) decodeMap() error {
 		if err != nil {
 			return err
 		}
-		d.writeQuotedASCII(key)
+		d.writeJsonASCII(key)
 		d.buf = append(d.buf, ':')
 		if err := d.decode(); err != nil {
 			return err
