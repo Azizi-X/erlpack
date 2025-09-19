@@ -28,6 +28,8 @@ const (
 	FORMAT_VERSION = 131
 )
 
+var hexMap = [16]byte{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'}
+
 type Decoder struct {
 	data    []byte
 	offset  int
@@ -89,10 +91,26 @@ func (d *Decoder) readBytes(n uint32) ([]byte, error) {
 func (d *Decoder) writeQuotedASCII(s []byte) {
 	d.buf = append(d.buf, '"')
 	for _, c := range s {
-		if c != '\\' && c != '"' {
-			d.buf = append(d.buf, c)
-		} else {
+		switch c {
+		case '\\', '"':
 			d.buf = append(d.buf, '\\', c)
+		case '\b':
+			d.buf = append(d.buf, '\\', 'b')
+		case '\f':
+			d.buf = append(d.buf, '\\', 'f')
+		case '\n':
+			d.buf = append(d.buf, '\\', 'n')
+		case '\r':
+			d.buf = append(d.buf, '\\', 'r')
+		case '\t':
+			d.buf = append(d.buf, '\\', 't')
+		default:
+			if c < 0x20 {
+				d.buf = append(d.buf, '\\', 'u', '0', '0',
+					hexMap[c>>4], hexMap[c&0xF])
+			} else {
+				d.buf = append(d.buf, c)
+			}
 		}
 	}
 	d.buf = append(d.buf, '"')
