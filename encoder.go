@@ -158,6 +158,11 @@ func (e *Encoder) rawPack(value any) []byte {
 		val := reflect.ValueOf(v)
 
 		for t.Kind() == reflect.Ptr {
+			if val.IsNil() {
+				result = append(result, e.AppendNil()...)
+				return result
+			}
+
 			t = t.Elem()
 			val = val.Elem()
 		}
