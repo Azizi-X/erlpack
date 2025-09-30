@@ -34,6 +34,7 @@ type Decoder struct {
 	data    []byte
 	offset  int
 	buf     []byte
+	tempBuf []byte
 	bufSize int
 }
 
@@ -304,6 +305,21 @@ func (d *Decoder) decodeKey() ([]byte, error) {
 		}
 
 		return d.data[d.offset-1 : d.offset], nil
+	case SMALL_BIG_EXT:
+		digits, err := d.read8()
+		if err != nil {
+			return nil, err
+		}
+
+		number, err := d.decodeBigRaw(uint32(digits))
+		if err != nil {
+			return nil, err
+		}
+
+		d.tempBuf = d.tempBuf[:0]
+		d.tempBuf = strconv.AppendInt(d.tempBuf, number, 10)
+
+		return d.tempBuf, nil
 	default:
 		return nil, errors.New("unsupported key tag: " + strconv.Itoa(int(tag)))
 	}
@@ -360,43 +376,54 @@ func (d *Decoder) decode() error {
 	}
 }
 
-func (d *Decoder) decodeBig(digits uint32) error {
+func (d *Decoder) decodeBigRaw(digits uint32) (int64, error) {
 	sign, err := d.read8()
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	if digits > 8 {
-		return fmt.Errorf("unable to decode big ints larger than 8 bytes")
+		return 0, fmt.Errorf("unable to decode big ints larger than 8 bytes")
 	}
 
-	var value uint64
+	var value int64
 	var b uint64 = 1
 	for range digits {
 		digit, err := d.read8()
 		if err != nil {
-			return err
+			return 0, err
 		}
-		value += uint64(digit) * b
+		value += int64(uint64(digit) * b)
 		b <<= 8
 	}
 
 	if digits <= 4 {
 		if sign == 0 {
-			d.buf = strconv.AppendUint(d.buf, value, 10)
-			return nil
+			return value, nil
 		}
-		d.buf = strconv.AppendInt(d.buf, -int64(value), 10)
+		return -value, nil
+	}
+
+	if sign != 0 {
+		return -value, nil
+	}
+
+	return value, nil
+}
+
+func (d *Decoder) decodeBig(digits uint32) error {
+	value, err := d.decodeBigRaw(digits)
+	if err != nil {
+		return err
+	}
+
+	if digits <= 4 {
+		d.buf = strconv.AppendInt(d.buf, value, 10)
 		return nil
 	}
 
 	d.buf = append(d.buf, '"')
-
-	if sign != 0 {
-		d.buf = append(d.buf, '-')
-	}
-
-	d.buf = strconv.AppendUint(d.buf, value, 10)
+	d.buf = strconv.AppendInt(d.buf, value, 10)
 	d.buf = append(d.buf, '"')
 
 	return nil
