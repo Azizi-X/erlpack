@@ -13,12 +13,13 @@ func (etf *Etf) Unpack(data []byte) ([]byte, error) {
 	return etf.unpack(data)
 }
 
-func NewEtf(bufSize int) *Etf {
+func NewEtf() *Etf {
 	var encoder = NewEncoder()
-	var decoder = NewDecoder(bufSize)
+	var decoder = NewDecoder()
 
 	return &Etf{
 		Encoder: encoder,
 		Decoder: decoder,
 	}
 }
+
