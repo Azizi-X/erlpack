@@ -433,11 +433,12 @@ func (d *Decoder) unpack(data []byte) ([]byte, error) {
 	
 	d.offset = 0
 	d.data = data[1:]
-	d.buf = d.buf[:0]
+	d.buf = nil
 
 	if err := d.decode(); err != nil {
 		return nil, err
 	}
 	return d.buf, nil
 }
+
 
