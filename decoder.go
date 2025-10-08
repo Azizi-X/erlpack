@@ -35,13 +35,10 @@ type Decoder struct {
 	offset  int
 	buf     []byte
 	tempBuf []byte
-	bufSize int
 }
 
-func NewDecoder(bufSize int) *Decoder {
-	return &Decoder{
-		bufSize: bufSize,
-	}
+func NewDecoder() *Decoder {
+	return &Decoder{}
 }
 
 func (d *Decoder) read8() (uint8, error) {
@@ -433,13 +430,14 @@ func (d *Decoder) unpack(data []byte) ([]byte, error) {
 	if len(data) == 0 || data[0] != FORMAT_VERSION {
 		return nil, errors.New("invalid format")
 	}
-
-	d.data = data[1:]
+	
 	d.offset = 0
-	d.buf = make([]byte, 0, d.bufSize)
+	d.data = data[1:]
+	d.buf = d.buf[:0]
 
 	if err := d.decode(); err != nil {
 		return nil, err
 	}
 	return d.buf, nil
 }
+
