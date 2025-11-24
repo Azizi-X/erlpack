@@ -67,8 +67,14 @@ func (*Encoder) AppendInt64(v int64) []byte {
 }
 
 func (e *Encoder) AppendMap(m map[string]any) []byte {
+	length := len(m)
+
+	if length > math.MaxUint32-1 {
+		panic("Dictionary has too many properties")
+	}
+
 	result := e.AppendByte(MAP_EXT)
-	result = append(result, e.AppendUint32(uint32(len(m)))...)
+	result = append(result, e.AppendUint32(uint32(length))...)
 	for key, val := range m {
 		result = append(result, e.AppendBinary(key)...)
 		result = append(result, e.rawPack(val)...)
@@ -175,6 +181,15 @@ func (e *Encoder) rawPack(value any) []byte {
 			var data = NewStruct(v).Map()
 			result = append(result, e.rawPack(data)...)
 		case reflect.Slice, reflect.Array:
+			length := val.Len()
+
+			if length == 0 {
+				result = append(result, e.AppendByte(NIL_EXT)...)
+				return result
+			} else if length > math.MaxUint32-1 {
+				panic("List is too large")
+			}
+
 			result = append(result, e.AppendByte(LIST_EXT)...)
 			result = append(result, e.AppendUint32(uint32(val.Len()))...)
 			for i := range val.Len() {
@@ -183,7 +198,7 @@ func (e *Encoder) rawPack(value any) []byte {
 			}
 			result = append(result, e.AppendByte(NIL_EXT)...)
 		default:
-			fmt.Printf("Unsupported etf type: %T\n", v)
+			panic("Unsupported etf type: " + fmt.Sprintf("%T", v))
 		}
 	}
 
