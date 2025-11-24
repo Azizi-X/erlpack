@@ -42,12 +42,6 @@ func (*Encoder) AppendFloat64(f float64) []byte {
 	return buf
 }
 
-func (*Encoder) AppendFloat32(f float32) []byte {
-	buf := make([]byte, 4)
-	binary.BigEndian.PutUint32(buf, math.Float32bits(f))
-	return buf
-}
-
 func (e *Encoder) AppendInt(v int64) []byte {
 	if v >= 0 && v <= 255 {
 		result := e.AppendByte(SMALL_INTEGER_EXT)
@@ -106,7 +100,7 @@ func (*Encoder) convertMap(x any) (map[string]any, bool) {
 	return out, true
 }
 
-func (e *Encoder) pack(value any) []byte {
+func (e *Encoder) Pack(value any) []byte {
 	return append([]byte{FORMAT_VERSION}, e.rawPack(value)...)
 }
 
@@ -128,7 +122,7 @@ func (e *Encoder) rawPack(value any) []byte {
 		result = append(result, e.AppendInt(v)...)
 	case float32:
 		result = append(result, e.AppendByte(NEW_FLOAT_EXT)...)
-		result = append(result, e.AppendFloat32(v)...)
+		result = append(result, e.AppendFloat64(float64(v))...)
 	case float64:
 		result = append(result, e.AppendByte(NEW_FLOAT_EXT)...)
 		result = append(result, e.AppendFloat64(v)...)
@@ -157,7 +151,7 @@ func (e *Encoder) rawPack(value any) []byte {
 		t := reflect.TypeOf(v)
 		val := reflect.ValueOf(v)
 
-		for t.Kind() == reflect.Ptr {
+		for t.Kind() == reflect.Pointer {
 			if val.IsNil() {
 				result = append(result, e.AppendNil()...)
 				return result
