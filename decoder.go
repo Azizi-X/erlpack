@@ -313,6 +313,8 @@ func (d *Decoder) decodeKey() ([]byte, error) {
 			return nil, err
 		}
 
+		fmt.Println("------")
+
 		d.tempBuf = d.tempBuf[:0]
 		d.tempBuf = strconv.AppendInt(d.tempBuf, number, 10)
 
@@ -426,11 +428,11 @@ func (d *Decoder) decodeBig(digits uint32) error {
 	return nil
 }
 
-func (d *Decoder) unpack(data []byte) ([]byte, error) {
+func (d *Decoder) Unpack(data []byte) ([]byte, error) {
 	if len(data) == 0 || data[0] != FORMAT_VERSION {
 		return nil, errors.New("invalid format")
 	}
-	
+
 	d.offset = 0
 	d.data = data[1:]
 	d.buf = nil
@@ -440,5 +442,3 @@ func (d *Decoder) unpack(data []byte) ([]byte, error) {
 	}
 	return d.buf, nil
 }
-
-
