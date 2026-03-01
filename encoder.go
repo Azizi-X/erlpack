@@ -157,6 +157,11 @@ func (e *Encoder) rawPack(value any) []byte {
 	case map[string]any:
 		result = append(result, e.AppendMap(v)...)
 	default:
+		if stringer, ok := value.(fmt.Stringer); ok {
+			result = append(result, e.rawPack(stringer.String())...)
+			return result
+		}
+
 		t := reflect.TypeOf(v)
 		val := reflect.ValueOf(v)
 
