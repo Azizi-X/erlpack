@@ -101,10 +101,17 @@ func (*Encoder) convertMap(x any) (map[string]any, bool) {
 	}
 	out := make(map[string]any, v.Len())
 	for _, key := range v.MapKeys() {
-		if key.Kind() != reflect.String {
+		var keyStr string
+
+		if key.Kind() == reflect.String {
+			keyStr = key.String()
+		} else if s, ok := key.Interface().(fmt.Stringer); ok {
+			keyStr = s.String()
+		} else {
 			panic(fmt.Sprintf("expected string, got %s", key.Type()))
 		}
-		out[key.String()] = v.MapIndex(key).Interface()
+
+		out[keyStr] = v.MapIndex(key).Interface()
 	}
 	return out, true
 }
