@@ -88,11 +88,13 @@ func (s *Struct) FillMap(out map[string]any) {
 		var finalVal any
 
 		if val.CanInterface() {
-			if marshaler, ok := val.Interface().(json.Marshaler); ok {
-				if b, err := marshaler.MarshalJSON(); err == nil {
-					var temp any
-					if err := json.Unmarshal(b, &temp); err == nil {
-						val = reflect.ValueOf(temp)
+			if val.Kind() != reflect.Pointer || !val.IsNil() {
+				if marshaler, ok := val.Interface().(json.Marshaler); ok {
+					if b, err := marshaler.MarshalJSON(); err == nil {
+						var temp any
+						if err := json.Unmarshal(b, &temp); err == nil {
+							val = reflect.ValueOf(temp)
+						}
 					}
 				}
 			}
