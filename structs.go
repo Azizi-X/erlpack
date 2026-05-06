@@ -10,6 +10,8 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+
+	orderedmap "github.com/wk8/go-ordered-map/v2"
 )
 
 type Struct struct {
@@ -386,4 +388,42 @@ func (s *Struct) nested(val reflect.Value) any {
 	}
 
 	return finalVal
+}
+
+func (s *Struct) OrderedMap(order []string) *orderedmap.OrderedMap[string, any] {
+	om := orderedmap.New[string, any]()
+
+	m := s.Map()
+
+	seen := make(map[string]bool)
+
+	for _, k := range order {
+		if v, ok := m[k]; ok {
+			om.Set(k, v)
+			seen[k] = true
+		}
+	}
+
+	for _, f := range s.structFields() {
+		name := f.Name
+
+		tag := f.Tag.Get(s.TagName)
+		if tag != "" && tag != "-" {
+			if before, _, ok := strings.Cut(tag, ","); ok {
+				name = before
+			} else {
+				name = tag
+			}
+		}
+
+		if seen[name] {
+			continue
+		}
+
+		if v, ok := m[name]; ok {
+			om.Set(name, v)
+		}
+	}
+
+	return om
 }
